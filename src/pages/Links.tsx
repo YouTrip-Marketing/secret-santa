@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { decodeOrganiser, type Draw } from '../lib/codec';
-import { buildLinks, copyAllText, type DrawLinks } from '../lib/links';
+import { buildLinks, copyAllText, groupMessage, type DrawLinks } from '../lib/links';
 import { copyText } from '../lib/clipboard';
 import { saveLastDraw } from '../lib/storage';
 import { navigate } from '../lib/router';
@@ -63,13 +63,23 @@ export function Links({ token }: { token: string }) {
 
       <BudgetBanner budget={draw.budget} />
 
-      <div className="notice" role="note">
-        <strong>Don't open these links.</strong> Each one reveals that person's giftee. Send each person only their own link.
-      </div>
+      <section className="card share">
+        <h2>Group link</h2>
+        <div className="organiser-link share__link">
+          <code>{links.group.replace(/^https?:\/\//, '')}</code>
+          <CopyButton text={links.group} />
+        </div>
+        <CopyButton text={groupMessage(draw, links.group)} label="Copy message" big />
+        <p className="muted share__rule">Don't tap anyone's name but your own.</p>
+      </section>
 
-      <section className="card">
+      <details className="card card--quiet more">
+        <summary>Or send individual links</summary>
+        <div className="notice" role="note">
+          <strong>Don't open these links.</strong> Each one reveals that person's giftee. Send each person only their own link.
+        </div>
         <div className="card__head">
-          <h2>Personal links</h2>
+          <span className="muted">{links.people.length} links</span>
           <CopyButton text={copyAllText(links.people)} label="Copy all" big />
         </div>
         <ul className="links">
@@ -81,7 +91,7 @@ export function Links({ token }: { token: string }) {
             </li>
           ))}
         </ul>
-      </section>
+      </details>
 
       <section className="card card--quiet">
         <h2>Organiser link</h2>

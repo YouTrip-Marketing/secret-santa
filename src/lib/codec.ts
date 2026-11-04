@@ -7,7 +7,7 @@
  * URL bar), not secrecy from someone who decodes the token deliberately.
  *
  * IVs are deterministic: drawNonce(8) | index(4). Index 0..n-1 are reveal links, 0xFFFFFFFF is the
- * organiser link. That keeps (key, iv) unique per draw and lets the organiser link regenerate the
+ * organiser link, 0xFFFFFFFE is the group link. That keeps (key, iv) unique per draw and lets the organiser link regenerate the
  * exact same reveal links later.
  */
 
@@ -32,7 +32,9 @@ export interface Draw extends DrawMeta {
 const VERSION = 1;
 const KIND_REVEAL = 1;
 const KIND_ORGANISER = 2;
+const KIND_GROUP = 3;
 const ORGANISER_INDEX = 0xffffffff;
+const GROUP_INDEX = 0xfffffffe;
 const HEADER_LEN = 1 + 1 + 16 + 12;
 
 export class LinkError extends Error {}
@@ -169,4 +171,63 @@ export async function decodeOrganiser(token: string): Promise<Draw> {
     throw new LinkError('bad payload');
   }
   return { group: w.g ?? '', budget: w.b ?? '', names, assignment: a, key, nonce: iv.slice(0, 8) };
+}
+
+// ---------- group link ----------
+/*
+ * Compact packing to keep the shared link short:
+ *   format(1: 0 raw, 1 deflate-raw) | then, possibly deflated:
+ *   n(1) | assignment(n bytes) | utf8( group \n budget \n name_0 \n ... name_{n-1} )
+ * Names never contain newlines (one name per line on input; whitespace is collapsed).
+ */
+const oneLine = (s: string) => s.replace(/[\r\n]+/g, ' ');
+
+export function isValidAssignment(a: ArrayLike<number>, n: number): boolean {
+  if (a.length !== n) return false;
+  const seen = new Set<number>();
+  for (let i = 0; i < n; i++) {
+    const v = a[i];
+    if (!Number.isInteger(v) || v < 0 || v >= n || v === i || seen.has(v)) return false;
+    seen.add(v);
+  }
+  return true;
+}
+
+export async function encodeGroup(draw: Draw): Promise<string> {
+  const n = draw.names.length;
+  if (n > 255) throw new RangeError('too many names');
+  const text = enc.encode([draw.group, draw.budget, ...draw.names].map(oneLine).join('\n'));
+  const body = new Uint8Array(1 + n + text.length);
+  body[0] = n;
+  body.set(draw.assignment, 1);
+  body.set(text, 1 + n);
+  const packed = await deflate(body);
+  const useDeflate = packed.length < body.length;
+  const chosen = useDeflate ? packed : body;
+  const plain = new Uint8Array(1 + chosen.length);
+  plain[0] = useDeflate ? 1 : 0;
+  plain.set(chosen, 1);
+  return seal(KIND_GROUP, draw.key, makeIv(draw.nonce, GROUP_INDEX), plain);
+}
+
+export async function decodeGroup(token: string): Promise<Draw> {
+  const { plain, key, iv } = await open(token, KIND_GROUP);
+  let body: Uint8Array;
+  try {
+    if (plain[0] === 1) body = await inflate(plain.slice(1));
+    else if (plain[0] === 0) body = plain.slice(1);
+    else throw new Error();
+  } catch {
+    throw new LinkError('bad payload');
+  }
+  const n = body[0];
+  const assignment = Array.from(body.slice(1, 1 + n));
+  const parts = dec.decode(body.slice(1 + n)).split('\n');
+  if (n < 2 || parts.length !== n + 2 || !isValidAssignment(assignment, n)) throw new LinkError('bad payload');
+  const [group, budget, ...names] = parts;
+  return { group, budget, names, assignment, key, nonce: iv.slice(0, 8) };
+}
+
+export function drawId(draw: Pick<Draw, 'nonce'>): string {
+  return Array.from(draw.nonce, (b) => b.toString(16).padStart(2, '0')).join('');
 }

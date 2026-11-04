@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   LinkError,
+  decodeGroup,
   decodeOrganiser,
+  drawId,
+  encodeGroup,
+  isValidAssignment,
   decodeReveal,
   encodeOrganiser,
   encodeReveal,
@@ -10,7 +14,7 @@ import {
   toBase64Url,
 } from '../src/lib/codec';
 import { derange } from '../src/lib/derange';
-import { buildLinks, copyAllText } from '../src/lib/links';
+import { buildLinks, copyAllText, groupMessage } from '../src/lib/links';
 
 const meta = { group: 'YouTrip Marketing Secret Santa 2026', budget: 'S$30' };
 
@@ -122,3 +126,79 @@ function atobSafe(token: string): string {
     return '';
   }
 }
+
+// Realistic office names, 5-14 characters.
+const POOL = [
+  'Kelicia Ong', 'Cass', 'Sandra Lim', 'Terry', 'Charla', 'Joelle Tan', 'Genevieve', 'Marcus Lee', 'Priya Nair',
+  'Daniel Koh', 'Aisha', 'Benjamin Teo', 'Chloe Wong', 'Darren Ng', 'Elaine Chua', 'Farhan', 'Grace Ho',
+  'Hui Min', 'Irfan Rahman', 'Jasmine Goh', 'Kenneth Yeo', 'Li Wei', 'Melissa Tay', 'Nicholas', 'Olivia Sim',
+  'Pei Shan', 'Qing Yi', 'Rachel Foo', 'Siti Nur', 'Timothy Lau',
+];
+
+describe('group link', () => {
+  it('round-trips the full draw, including unicode names, for n = 3..50', async () => {
+    for (const n of [3, 4, 7, 10, 30, 50]) {
+      const names = Array.from({ length: n }, (_, i) => (i === 1 ? 'Zoë 陈美玲' : `${POOL[i % POOL.length]} ${i}`));
+      const draw = makeDraw(names);
+      const out = await decodeGroup(await encodeGroup(draw));
+      expect(out.names).toEqual(names);
+      expect(out.assignment).toEqual(draw.assignment);
+      expect(out.group).toBe(meta.group);
+      expect(out.budget).toBe(meta.budget);
+      expect(drawId(out)).toBe(drawId(draw));
+      expect(isValidAssignment(out.assignment, n)).toBe(true);
+    }
+  });
+
+  it('handles empty group name and budget', async () => {
+    const draw = newDraw(['Amy', 'Ben', 'Cat'], derange(3), { group: '', budget: '' });
+    const out = await decodeGroup(await encodeGroup(draw));
+    expect(out.group).toBe('');
+    expect(out.budget).toBe('');
+    expect(out.names).toEqual(['Amy', 'Ben', 'Cat']);
+  });
+
+  it('does not expose names in the token', async () => {
+    const draw = makeDraw(POOL.slice(0, 10));
+    const token = await encodeGroup(draw);
+    const raw = new TextDecoder('latin1').decode(fromBase64Url(token));
+    for (const n of draw.names) {
+      expect(token.toLowerCase()).not.toContain(n.toLowerCase());
+      expect(raw).not.toContain(n);
+    }
+  });
+
+  it('is not interchangeable with personal or organiser tokens', async () => {
+    const draw = makeDraw(['Amy', 'Ben', 'Cat']);
+    const g = await encodeGroup(draw);
+    await expect(decodeReveal(g)).rejects.toBeInstanceOf(LinkError);
+    await expect(decodeOrganiser(g)).rejects.toBeInstanceOf(LinkError);
+    await expect(decodeGroup(await encodeOrganiser(draw))).rejects.toBeInstanceOf(LinkError);
+    const bytes = fromBase64Url(g);
+    bytes[bytes.length - 3] ^= 0x40;
+    await expect(decodeGroup(toBase64Url(bytes))).rejects.toBeInstanceOf(LinkError);
+  });
+
+  it('rejects an assignment that is not a derangement', () => {
+    expect(isValidAssignment([1, 2, 0], 3)).toBe(true);
+    expect(isValidAssignment([0, 2, 1], 3)).toBe(false);
+    expect(isValidAssignment([1, 1, 0], 3)).toBe(false);
+    expect(isValidAssignment([1, 0], 3)).toBe(false);
+  });
+
+  it('keeps the group URL short (logs lengths for 10 and 30 names)', async () => {
+    const base = 'https://youtrip-marketing.github.io/secret-santa/';
+    for (const n of [10, 30]) {
+      const draw = makeDraw(POOL.slice(0, n));
+      const { group } = await buildLinks(draw, base);
+      console.log(`group URL, ${n} names: ${group.length} chars (token ${group.length - base.length - 4})`);
+      expect(group.length).toBeLessThan(n === 10 ? 320 : 640);
+    }
+  });
+
+  it('group message is paste-ready', async () => {
+    const msg = groupMessage({ group: 'G', budget: 'S$30' }, 'https://x.test/#/g/abc');
+    expect(msg).toBe('🎅 G\nBudget: S$30\nTap your name to draw: https://x.test/#/g/abc');
+    expect(groupMessage({ group: '', budget: '' }, 'u')).toBe('🎅 Secret Santa\nTap your name to draw: u');
+  });
+});

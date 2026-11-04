@@ -8,6 +8,7 @@ const setVal = (p, sel, v) => p.$eval(sel, (e, v) => {
   e.dispatchEvent(new Event('input', { bubbles: true }));
 }, v);
 let reveal;
+let group;
 for (const [w, h] of [[375, 812], [1440, 900]]) {
   const ctx = await browser.createBrowserContext();
   const p = await ctx.newPage();
@@ -20,9 +21,11 @@ for (const [w, h] of [[375, 812], [1440, 900]]) {
     await setVal(p, 'textarea', 'Kelicia\nCass\nSandra\nTerry\nCharla');
     await p.click('button[type=submit]');
     await p.waitForSelector('.links__row');
-    await p.screenshot({ path: `${OUT}/links-${w}.png`, fullPage: true });
-    reveal = await p.$eval('.links__url', (e) => 'http://' + e.textContent);
-    if (BASE.startsWith('https')) reveal = reveal.replace('http://', 'https://');
+    await new Promise((r) => setTimeout(r, 300));
+    await p.screenshot({ path: `${OUT}/share-page-${w}.png` });
+    const proto = BASE.startsWith('https') ? 'https://' : 'http://';
+    reveal = proto + (await p.$eval('.links__url', (e) => e.textContent));
+    group = proto + (await p.$eval('.share code', (e) => e.textContent));
   }
   const r = await (await browser.createBrowserContext()).newPage();
   await r.setViewport({ width: w, height: h, deviceScaleFactor: 2, isMobile: w < 500, hasTouch: w < 500 });
@@ -33,6 +36,26 @@ for (const [w, h] of [[375, 812], [1440, 900]]) {
   await r.waitForSelector('.result__name');
   await new Promise((res) => setTimeout(res, 3600));
   await r.screenshot({ path: `${OUT}/reveal-open-${w}.png` });
+  if (w === 375) {
+    const g = await (await browser.createBrowserContext()).newPage();
+    await g.setViewport({ width: w, height: h, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    await g.goto(group, { waitUntil: 'networkidle0' });
+    await g.waitForSelector('.chip');
+    await new Promise((res) => setTimeout(res, 300));
+    await g.screenshot({ path: `${OUT}/group-pick-${w}.png` });
+    await g.tap('.chip');
+    await g.waitForSelector('.confirm');
+    await g.screenshot({ path: `${OUT}/group-confirm-${w}.png` });
+    await g.tap('.confirm .btn--primary');
+    await g.waitForSelector('.hat');
+    await new Promise((res) => setTimeout(res, 500));
+    await g.screenshot({ path: `${OUT}/group-shuffle-${w}.png` });
+    await g.waitForSelector('.gift-btn', { timeout: 5000 });
+    await g.tap('.gift-btn');
+    await g.waitForSelector('.result__name');
+    await new Promise((res) => setTimeout(res, 3600));
+    await g.screenshot({ path: `${OUT}/group-reveal-${w}.png` });
+  }
 }
 await browser.close();
 console.log('done');

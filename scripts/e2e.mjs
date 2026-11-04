@@ -59,24 +59,39 @@ check('navigates to organiser route', organiserUrl.includes('#/o/'));
 const rows = await page.$$eval('.links__row', (rs) => rs.map((r) => r.querySelector('.links__name').textContent));
 check('one row per participant', JSON.stringify(rows) === JSON.stringify(NAMES), rows.join(','));
 const bodyText = await page.$eval('body', (b) => b.innerText);
-check('links page shows warning', bodyText.includes("Don't open these links"));
+check('share page leads with a group link', (await page.$eval('.share code', (e) => e.textContent)).includes('#/g/'));
+check('individual links are collapsed by default', (await page.$eval('details.more', (d) => d.open)) === false);
+await page.screenshot({ path: `${OUT}/2-share-375.png`, fullPage: true });
+await page.click('details.more summary');
+const openText = await page.$eval('body', (b) => b.innerText);
+check('individual links section shows warning', openText.includes("Don't open these links"));
 check('budget banner shown, no date or countdown', (await page.$eval('.banner', (e) => e.innerText)).includes('S$30') && (await page.$('.countdown, input[type=date]')) === null && !bodyText.includes('exchange'));
-await page.screenshot({ path: `${OUT}/2-links-375.png`, fullPage: true });
+
+// copy group link + message (read back from clipboard)
+await ctx.overridePermissions(baseOrigin, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
+await page.click('.share .organiser-link .btn');
+await new Promise((r) => setTimeout(r, 200));
+const groupUrl = await page.evaluate(() => navigator.clipboard.readText());
+check('Copy copies the group link', groupUrl.startsWith(`${BASE}#/g/`), `${groupUrl.length} chars`);
+await page.click('.share > .btn');
+await new Promise((r) => setTimeout(r, 200));
+const msg = await page.evaluate(() => navigator.clipboard.readText());
+check('Copy message is paste-ready', msg === `🎅 YouTrip Marketing Secret Santa 2026\nBudget: S$30\nTap your name to draw: ${groupUrl}`, JSON.stringify(msg.slice(0, 60)));
+check('no names readable in group token', NAMES.every((n) => !decodeURIComponent(groupUrl).includes(n)));
 
 // copy all (read back from clipboard)
-await ctx.overridePermissions(baseOrigin, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
-await page.click('.card__head .btn');
+await page.click('.more .card__head .btn');
 await new Promise((r) => setTimeout(r, 200));
 const clip = await page.evaluate(() => navigator.clipboard.readText());
 const lines = clip.split('\n');
 const linkOk = lines.length === NAMES.length && lines.every((l, i) => l.startsWith(`${NAMES[i]}: ${BASE}#/r/`));
 check('Copy all produces "Name: link" lines', linkOk, `${lines.length} lines`);
-const copiedLabel = await page.$eval('.card__head .btn', (b) => b.textContent);
+const copiedLabel = await page.$eval('.more .card__head .btn', (b) => b.textContent);
 check('Copy all button confirms', copiedLabel.includes('Copied'), copiedLabel);
 const links = lines.map((l) => l.slice(l.indexOf(': ') + 2));
 check('no names readable in link tokens', links.every((u) => NAMES.every((n) => !decodeURIComponent(u).includes(n))));
 const maxLen = Math.max(...links.map((u) => u.length));
-console.log(`      reveal link length: ${maxLen} chars; organiser link length: ${organiserUrl.length} chars`);
+console.log(`      personal link: ${maxLen} chars; group link: ${groupUrl.length} chars; organiser link: ${organiserUrl.length} chars`);
 
 // localStorage safety net
 const stored = await page.evaluate(() => localStorage.getItem('secret-santa:last-organiser-link'));
@@ -129,7 +144,73 @@ for (let i = 0; i < links.length; i++) {
 }
 const giftees = Object.values(assignment);
 check('every reveal is a valid derangement', new Set(giftees).size === NAMES.length && NAMES.every((n) => assignment[n] !== n && NAMES.includes(assignment[n])));
-check('reveal pages list no other pairs', !results.some((r) => r.name.includes('leaks')));
+check('reveal pages list no other pairs', !results.some((r) => !r.ok && r.name.includes('leaks')));
+
+// ---------- group link flow ----------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const mobile = { width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+for (let i = 0; i < NAMES.length; i++) {
+  const c = await browser.createBrowserContext();
+  const p = await c.newPage();
+  watch(p);
+  await p.setViewport(mobile);
+  await p.goto(groupUrl, { waitUntil: 'networkidle0' });
+  await p.waitForSelector('.chip');
+  const chips = await p.$$eval('.chip__name', (es) => es.map((e) => e.textContent));
+  const html = await p.content();
+  const pre = await p.$eval('body', (b) => b.innerText);
+  if (i === 0) {
+    check('group page lists every name as a chip', JSON.stringify(chips) === JSON.stringify(NAMES));
+    check('group page shows group and budget', pre.includes('YouTrip Marketing Secret Santa 2026') && pre.includes('S$30') && pre.includes('Who are you?'));
+    await p.screenshot({ path: `${OUT}/5-group-pick-375.png` });
+  }
+  const leaked = html.includes('Secret Santa for') || (await p.$('.result, .gift-btn')) !== null;
+  if (leaked) check(`group page ${i} shows a pair before tapping`, false);
+  const chip = (await p.$$('.chip'))[i];
+  await chip.tap();
+  await p.waitForSelector('.confirm');
+  const q = await p.$eval('.confirm__q', (e) => e.innerText);
+  if (i === 0) check('confirm step names the person', q.includes(NAMES[0]) && (await p.$eval('.confirm', (e) => e.innerText)).includes('Yes, draw!'));
+  if (i === 0) {
+    // Back returns to the picker without saving anything
+    await p.tap('.confirm .btn--soft');
+    await p.waitForSelector('.chip');
+    const savedAfterBack = await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('secret-santa:group:')).length);
+    check('Back returns to picker without remembering', savedAfterBack === 0);
+    await (await p.$$('.chip'))[0].tap();
+    await p.waitForSelector('.confirm');
+  }
+  await p.tap('.confirm .btn--primary');
+  await p.waitForSelector('.hat');
+  if (i === 0) check('shuffle shows names from the hat', (await p.$eval('.hat__name', (e) => e.textContent)).length > 0);
+  await p.waitForSelector('.gift-btn', { timeout: 5000 });
+  await p.tap('.gift-btn');
+  await p.waitForSelector('.result__name', { timeout: 3000 });
+  const giftee = await p.$eval('.result__name', (e) => e.textContent);
+  if (giftee !== assignment[NAMES[i]]) check(`group reveal ${i} matches personal link`, false, `${giftee} vs ${assignment[NAMES[i]]}`);
+  const post = await p.$eval('body', (b) => b.innerText);
+  const others = NAMES.filter((n) => n !== NAMES[i] && n !== giftee && post.includes(n));
+  if (others.length) check(`group reveal ${i} leaks other names`, false, others.join(','));
+  if (i === 0) {
+    await sleep(500);
+    await p.screenshot({ path: `${OUT}/6-group-reveal-375.png` });
+    check('group reveal fires confetti', (await p.$('.confetti-canvas')) !== null);
+    // device memory: reload goes straight to own reveal
+    await p.reload({ waitUntil: 'networkidle0' });
+    await p.waitForSelector('.result__name', { timeout: 3000 });
+    const again = await p.$eval('.result__name', (e) => e.textContent);
+    check('return visit goes straight to own reveal', again === giftee && (await p.$('.chip')) === null);
+    const sw = await p.$eval('.switch .link', (e) => e.textContent);
+    check('return visit offers "Not <Name>? Switch"', sw === `Not ${NAMES[0]}? Switch`, sw);
+    await p.tap('.switch .link');
+    await p.waitForSelector('.chip');
+    const savedAfterSwitch = await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('secret-santa:group:')).length);
+    check('Switch returns to picker and forgets the device', savedAfterSwitch === 0 && (await p.$('.result')) === null);
+  }
+  await c.close();
+}
+check('group reveals match personal links for everyone', !results.some((r) => !r.ok && r.name.startsWith('group reveal')));
+check('group page never shows a pair before tapping', !results.some((r) => !r.ok && r.name.includes('before tapping')));
 
 // broken link
 const p3 = await (await browser.createBrowserContext()).newPage();
@@ -138,7 +219,7 @@ const broken = await p3.$eval('body', (b) => b.innerText);
 check('damaged link shows error page', broken.includes("This link doesn't work"));
 
 // horizontal overflow at 375
-for (const [label, url] of [['organiser', BASE], ['links', organiserUrl], ['reveal', links[1]]]) {
+for (const [label, url] of [['organiser', BASE], ['share', organiserUrl], ['reveal', links[1]], ['group', groupUrl]]) {
   const p = await (await browser.createBrowserContext()).newPage();
   await p.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true });
   await p.goto(url, { waitUntil: 'networkidle0' });

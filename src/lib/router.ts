@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 
-export type Route = { page: 'home' } | { page: 'reveal'; token: string } | { page: 'organiser'; token: string };
+export type Route =
+  | { page: 'home' }
+  | { page: 'reveal'; token: string }
+  | { page: 'organiser'; token: string }
+  | { page: 'group'; token: string };
 
 export function parseHash(hash: string): Route {
   const h = hash.replace(/^#/, '');
-  const m = /^\/(r|o)\/(.+)$/.exec(h);
-  if (m) return m[1] === 'r' ? { page: 'reveal', token: m[2] } : { page: 'organiser', token: m[2] };
+  const m = /^\/(r|o|g)\/(.+)$/.exec(h);
+  if (m) {
+    const page = m[1] === 'r' ? 'reveal' : m[1] === 'o' ? 'organiser' : 'group';
+    return { page, token: m[2] };
+  }
   return { page: 'home' };
 }
 

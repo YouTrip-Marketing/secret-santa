@@ -23,3 +23,29 @@ export function clearLastDraw(): void {
     /* ignore */
   }
 }
+
+const groupKey = (id: string) => `secret-santa:group:${id}`;
+
+export function loadGroupMember(id: string): string | null {
+  try {
+    return localStorage.getItem(groupKey(id));
+  } catch {
+    return null;
+  }
+}
+
+export function saveGroupMember(id: string, name: string): void {
+  try {
+    localStorage.setItem(groupKey(id), name);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearGroupMember(id: string): void {
+  try {
+    localStorage.removeItem(groupKey(id));
+  } catch {
+    /* ignore */
+  }
+}

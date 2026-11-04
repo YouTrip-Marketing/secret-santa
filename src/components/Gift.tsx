@@ -2,7 +2,7 @@ export type GiftState = 'wrapped' | 'opening' | 'open';
 
 export function Gift({ state }: { state: GiftState }) {
   return (
-    <svg className={`gift gift--${state}`} viewBox="0 0 220 220" role="img" aria-label="Wrapped gift">
+    <svg className={`gift gift--${state}`} viewBox="0 34 220 186" role="img" aria-label="Wrapped gift">
       <defs>
         <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
           <circle cx="5" cy="5" r="2.6" fill="#f6e7cb" opacity="0.55" />

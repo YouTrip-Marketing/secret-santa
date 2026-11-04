@@ -11,7 +11,6 @@ export function Organiser() {
   const [group, setGroup] = useState('');
   const [names, setNames] = useState('');
   const [budget, setBudget] = useState('S$30');
-  const [date, setDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastDraw = useMemo(() => loadLastDraw(), []);
@@ -31,7 +30,6 @@ export function Organiser() {
       const draw = newDraw(parsed.names, derange(parsed.names.length), {
         group: group.trim(),
         budget: budget.trim(),
-        date,
       });
       const token = await encodeOrganiser(draw);
       saveLastDraw(`${appBaseUrl()}#/o/${token}`);
@@ -75,16 +73,10 @@ export function Organiser() {
           />
         </label>
 
-        <div className="row">
-          <label className="field">
-            <span className="field__label">Budget</span>
-            <input type="text" value={budget} maxLength={20} onChange={(e) => setBudget(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field__label">Gift exchange date</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-        </div>
+        <label className="field">
+          <span className="field__label">Budget</span>
+          <input type="text" value={budget} maxLength={20} onChange={(e) => setBudget(e.target.value)} />
+        </label>
 
         {error && (
           <p className="error" role="alert">

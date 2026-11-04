@@ -14,8 +14,6 @@
 export interface DrawMeta {
   group: string;
   budget: string;
-  /** Exchange date as YYYY-MM-DD, or '' when not set. */
-  date: string;
 }
 
 export interface RevealPayload extends DrawMeta {
@@ -123,7 +121,8 @@ export function newDraw(names: string[], assignment: number[], meta: DrawMeta): 
 }
 
 // ---------- reveal links ----------
-type RevealWire = { f: string; t: string; g: string; b: string; d: string };
+// Tokens from before the date was removed also carry `d`; it is ignored.
+type RevealWire = { f: string; t: string; g: string; b: string };
 
 export async function encodeReveal(draw: Draw, index: number): Promise<string> {
   const wire: RevealWire = {
@@ -131,7 +130,6 @@ export async function encodeReveal(draw: Draw, index: number): Promise<string> {
     t: draw.names[draw.assignment[index]],
     g: draw.group,
     b: draw.budget,
-    d: draw.date,
   };
   return seal(KIND_REVEAL, draw.key, makeIv(draw.nonce, index), enc.encode(JSON.stringify(wire)));
 }
@@ -145,14 +143,14 @@ export async function decodeReveal(token: string): Promise<RevealPayload> {
     throw new LinkError('bad payload');
   }
   if (typeof w.f !== 'string' || typeof w.t !== 'string') throw new LinkError('bad payload');
-  return { giver: w.f, giftee: w.t, group: w.g ?? '', budget: w.b ?? '', date: w.d ?? '' };
+  return { giver: w.f, giftee: w.t, group: w.g ?? '', budget: w.b ?? '' };
 }
 
 // ---------- organiser link ----------
-type OrganiserWire = { g: string; b: string; d: string; n: string[]; a: number[] };
+type OrganiserWire = { g: string; b: string; n: string[]; a: number[] };
 
 export async function encodeOrganiser(draw: Draw): Promise<string> {
-  const wire: OrganiserWire = { g: draw.group, b: draw.budget, d: draw.date, n: draw.names, a: draw.assignment };
+  const wire: OrganiserWire = { g: draw.group, b: draw.budget, n: draw.names, a: draw.assignment };
   const packed = await deflate(enc.encode(JSON.stringify(wire)));
   return seal(KIND_ORGANISER, draw.key, makeIv(draw.nonce, ORGANISER_INDEX), packed);
 }
@@ -170,5 +168,5 @@ export async function decodeOrganiser(token: string): Promise<Draw> {
   if (!Array.isArray(names) || !Array.isArray(a) || names.length !== a.length || names.some((x) => typeof x !== 'string')) {
     throw new LinkError('bad payload');
   }
-  return { group: w.g ?? '', budget: w.b ?? '', date: w.d ?? '', names, assignment: a, key, nonce: iv.slice(0, 8) };
+  return { group: w.g ?? '', budget: w.b ?? '', names, assignment: a, key, nonce: iv.slice(0, 8) };
 }

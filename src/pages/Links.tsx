@@ -4,7 +4,7 @@ import { buildLinks, copyAllText, type DrawLinks } from '../lib/links';
 import { copyText } from '../lib/clipboard';
 import { saveLastDraw } from '../lib/storage';
 import { navigate } from '../lib/router';
-import { EventBanner } from '../components/EventBanner';
+import { BudgetBanner } from '../components/BudgetBanner';
 import { Holly } from '../components/Decor';
 import { BrokenLink } from './BrokenLink';
 
@@ -61,7 +61,7 @@ export function Links({ token }: { token: string }) {
         <p className="hero__sub">{draw.names.length} people · names drawn</p>
       </header>
 
-      <EventBanner budget={draw.budget} date={draw.date} />
+      <BudgetBanner budget={draw.budget} />
 
       <div className="notice" role="note">
         <strong>Don't open these links.</strong> Each one reveals that person's giftee. Send each person only their own link.

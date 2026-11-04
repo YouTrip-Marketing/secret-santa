@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { decodeReveal, type RevealPayload } from '../lib/codec';
-import { EventBanner } from '../components/EventBanner';
+import { BudgetBanner } from '../components/BudgetBanner';
 import { Gift, type GiftState } from '../components/Gift';
 import { burstConfetti } from '../components/confetti';
 import { BrokenLink } from './BrokenLink';
@@ -46,7 +46,7 @@ export function Reveal({ token }: { token: string }) {
         <h1>{data.group || 'Secret Santa'}</h1>
       </header>
 
-      <EventBanner budget={data.budget} date={data.date} />
+      <BudgetBanner budget={data.budget} />
 
       <section className="stage">
         {gift !== 'open' ? (

@@ -12,7 +12,7 @@ import {
 import { derange } from '../src/lib/derange';
 import { buildLinks, copyAllText } from '../src/lib/links';
 
-const meta = { group: 'YouTrip Marketing Secret Santa 2026', budget: 'S$30', date: '2026-12-19' };
+const meta = { group: 'YouTrip Marketing Secret Santa 2026', budget: 'S$30' };
 
 function makeDraw(names: string[]) {
   return newDraw(names, derange(names.length), meta);
@@ -38,7 +38,6 @@ describe('reveal links', () => {
       expect(out.giftee).not.toBe(out.giver);
       expect(out.group).toBe(meta.group);
       expect(out.budget).toBe(meta.budget);
-      expect(out.date).toBe(meta.date);
     }
   });
 
@@ -56,7 +55,7 @@ describe('reveal links', () => {
   it('a reveal payload carries only its own pair', async () => {
     const draw = makeDraw(['A1', 'B2', 'C3', 'D4', 'E5']);
     const out = await decodeReveal(await encodeReveal(draw, 2));
-    expect(Object.keys(out).sort()).toEqual(['budget', 'date', 'giftee', 'giver', 'group']);
+    expect(Object.keys(out).sort()).toEqual(['budget', 'giftee', 'giver', 'group']);
   });
 
   it('is deterministic per draw (organiser link regenerates the same links)', async () => {
@@ -77,6 +76,18 @@ describe('reveal links', () => {
     await expect(decodeReveal('not a token!')).rejects.toBeInstanceOf(LinkError);
     await expect(decodeReveal(await encodeOrganiser(draw))).rejects.toBeInstanceOf(LinkError);
     await expect(decodeOrganiser(token)).rejects.toBeInstanceOf(LinkError);
+  });
+});
+
+describe('legacy tokens with an exchange date', () => {
+  it('still decode, and the date is ignored', async () => {
+    const key = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plain = new TextEncoder().encode(JSON.stringify({ f: 'Amy', t: 'Ben', g: 'G', b: 'S$30', d: '2026-12-19' }));
+    const ck = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt']);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new Uint8Array([1, 1]) }, ck, plain));
+    const token = toBase64Url(new Uint8Array([1, 1, ...key, ...iv, ...ct]));
+    expect(await decodeReveal(token)).toEqual({ giver: 'Amy', giftee: 'Ben', group: 'G', budget: 'S$30' });
   });
 });
 

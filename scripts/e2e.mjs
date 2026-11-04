@@ -49,13 +49,9 @@ await setValue('textarea', '');
 // real draw
 await page.type('textarea', NAMES.join('\n') + '\n\n');
 await page.type('input[placeholder^=YouTrip]', 'YouTrip Marketing Secret Santa 2026');
-const budgetVal = await page.$eval('.row input[type=text]', (e) => e.value);
+const budgetVal = await page.$eval('input[maxlength="20"]', (e) => e.value);
+check('no date picker on form', (await page.$('input[type=date]')) === null);
 check('budget defaults to S$30', budgetVal === 'S$30', budgetVal);
-await page.$eval('input[type=date]', (e) => {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  setter.call(e, '2026-12-19');
-  e.dispatchEvent(new Event('input', { bubbles: true }));
-});
 await draw();
 await page.waitForSelector('.links__row', { timeout: 5000 }).catch(async (e) => { console.log('error on page:', await errorText()); throw e; });
 const organiserUrl = page.url();
@@ -64,7 +60,7 @@ const rows = await page.$$eval('.links__row', (rs) => rs.map((r) => r.querySelec
 check('one row per participant', JSON.stringify(rows) === JSON.stringify(NAMES), rows.join(','));
 const bodyText = await page.$eval('body', (b) => b.innerText);
 check('links page shows warning', bodyText.includes("Don't open these links"));
-check('countdown shown', (await page.$$('.countdown__cell')).length === 4);
+check('budget banner shown, no date or countdown', (await page.$eval('.banner', (e) => e.innerText)).includes('S$30') && (await page.$('.countdown, input[type=date]')) === null && !bodyText.includes('exchange'));
 await page.screenshot({ path: `${OUT}/2-links-375.png`, fullPage: true });
 
 // copy all (read back from clipboard)
@@ -112,7 +108,7 @@ for (let i = 0; i < links.length; i++) {
   const pre = await p.$eval('body', (b) => b.innerText);
   if (i === 0) {
     await p.screenshot({ path: `${OUT}/3-reveal-wrapped-375.png` });
-    check('reveal shows group, budget, date before unwrap', pre.includes('YouTrip Marketing Secret Santa 2026') && pre.includes('S$30') && pre.includes('19 Dec 2026'));
+    check('reveal shows group and budget, no date', pre.includes('YouTrip Marketing Secret Santa 2026') && pre.includes('S$30') && !/exchange|days|dec/i.test(pre));
   }
   const othersBefore = NAMES.filter((n) => n !== NAMES[i] && pre.includes(n));
   await p.tap('.gift-btn');

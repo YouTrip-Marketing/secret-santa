@@ -43,7 +43,7 @@ h2 { font-size: 1.2rem; color: var(--green); }
   z-index: 1;
   max-width: 640px;
   margin: 0 auto;
-  padding: calc(28px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));
+  padding: calc(58px + env(safe-area-inset-top)) 16px calc(clamp(130px, 20vh, 250px) + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -269,6 +269,19 @@ textarea[aria-invalid='true'] { border-color: var(--red); }
   font-weight: 700;
 }
 
+/* ---------- festive scene ---------- */
+.scene { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.scene__top { position: absolute; top: 0; left: 0; width: 100%; height: clamp(150px, 26vh, 260px); }
+.scene__bottom { position: absolute; bottom: 0; left: 0; width: 100%; height: clamp(150px, 24vh, 300px); }
+.scene__moon { position: absolute; top: clamp(70px, 11vh, 120px); right: max(14px, calc(50% - 600px)); width: clamp(40px, 6vw, 76px); height: auto; }
+.bulb { animation: twinkle 2.6s ease-in-out infinite; }
+.bulb--1 { animation-delay: -0.9s; }
+.bulb--2 { animation-delay: -1.7s; }
+.star { animation: twinkle 3.4s ease-in-out infinite; opacity: 0.75; }
+.star--1 { animation-delay: -1.2s; }
+.star--2 { animation-delay: -2.3s; }
+@keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
 /* ---------- snow + confetti ---------- */
 .snow { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
 .flake {
@@ -313,5 +326,10 @@ textarea[aria-invalid='true'] { border-color: var(--red); }
 
 @media (prefers-reduced-motion: reduce) {
   .snow { display: none; }
+  .bulb, .star { animation: none; }
   .gift--wrapped, .hint, .result, .gift--opening .gift__lid, .gift--opening .gift__body { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .scene__moon { top: calc(48px + env(safe-area-inset-top)); right: 12px; width: 34px; }
 }

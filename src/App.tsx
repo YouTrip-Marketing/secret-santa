@@ -4,6 +4,7 @@ import { Organiser } from './pages/Organiser';
 import { Links } from './pages/Links';
 import { Reveal } from './pages/Reveal';
 import { Snow } from './components/Snow';
+import { Scene } from './components/Scene';
 
 export function App() {
   const route = useRoute();
@@ -14,6 +15,7 @@ export function App() {
 
   return (
     <>
+      <Scene />
       <Snow />
       {route.page === 'reveal' ? (
         <Reveal key={route.token} token={route.token} />
